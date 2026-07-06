@@ -1,7 +1,8 @@
 # CodeRAG and GraphRAG System
 
 graphRAG is an intelligent Repository Analysis and Query System designed for C++ codebases. It combines Retrieval-Augmented Generation (RAG) with Graph-based knowledge representation to allow developers to semantically query their codebase, identify code dependencies, and evaluate the "impact radius" of potential changes.
-
+## YouTube Link : 
+https://youtu.be/IgHSRF05rcA
 ## Features
 
 * **Semantic Code Search:** Uses `jina-embeddings-v2-base-code` to generate embeddings of code chunks for accurate semantic similarity search.
