@@ -1,0 +1,19 @@
+tree_sitter
+
+tree_sitter_cpp
+sentence_transformers
+transformers==4.44.2
+dotenv
+requests
+# for the hugging face jina model
+--extra-index-url https://download.pytorch.org/whl/cu132
+torch
+transformers
+sentence-transformers
+huggingface-hub
+einops
+
+python-dotenv
+google-genai
+neo4j
+numpy
