@@ -87,3 +87,21 @@ To exit the CLI, press `Ctrl+C` twice.
    * Performs a local cosine similarity search in MongoDB to retrieve relevant code chunks.
    * Queries Neo4j for the dependency graph (impact radius) around the matched code chunks.
    * Prompts the LLM (Gemini) with the code, the impact radius, and conversation history to formulate the final response.
+
+
+
+
+## Detailed Pipeline Workflow
+
+The complete end-to-end pipeline operates in the following sequential stages:
+
+1. **Repository Ingestion:** The process begins by taking a target GitHub repository URL and fetching the codebase.
+2. **AST Generation:** Tree-sitter runs on the codebase to generate an Abstract Syntax Tree (AST), capturing the structural syntax and code elements.
+3. **Graph Construction:** The AST is filtered and processed to extract semantic nodes and relationships, which are then used to construct a knowledge graph stored in a Neo4j database.
+4. **Vector Embedding Generation:** In `ingestion.py`, the code chunks are processed to generate vector embeddings using **Jina Embeddings** (`jina-embeddings-v2-base-code`). 
+   * *Internally, Jina Embeddings v2 utilizes **JinaBERT**—a modified BERT architecture equipped with ALiBi (Attention with Linear Biases)—which allows it to efficiently handle an extended context window of up to 8,192 tokens for long code comprehension.*
+5. **Vector Storage:** The generated vector embeddings are subsequently stored in a local instance of MongoDB Atlas, which is spun up seamlessly via Docker.
+6. **Query Pre-processing:** When a user submits a query, the system first evaluates the conversational context to determine whether the query is a follow-up to previous interactions.
+7. **Prompt Embedding & Vector Search:** The user's query prompt is then converted into a vector embedding. The system queries the local MongoDB Atlas vector store using the prompt embedding to retrieve the most semantically relevant code chunks.
+8. **Graph Traversal (Impact Radius):** The retrieved chunks are used as entry points to traverse the Neo4j knowledge graph. The system finds the affected interconnected nodes up to a maximum depth (`maxdepth`), effectively mapping the codebase "impact radius".
+9. **LLM Generation & Display:** The original prompt, the retrieved relevant code snippets, and the graph-based impact radius are sent to an external LLM API to generate an informed response, which is finally displayed to the user.
