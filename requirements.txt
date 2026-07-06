@@ -12,8 +12,9 @@ transformers
 sentence-transformers
 huggingface-hub
 einops
-
+pymongo
 python-dotenv
 google-genai
 neo4j
-numpy
+numpy>=2.0.0
+scipy>=1.15.3
