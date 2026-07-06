@@ -1,6 +1,6 @@
-# PERKIFY: CodeRAG and GraphRAG System
+# CodeRAG and GraphRAG System
 
-PERKIFY is an intelligent Repository Analysis and Query System designed for C++ codebases. It combines Retrieval-Augmented Generation (RAG) with Graph-based knowledge representation to allow developers to semantically query their codebase, identify code dependencies, and evaluate the "blast radius" of potential changes.
+graphRAG is an intelligent Repository Analysis and Query System designed for C++ codebases. It combines Retrieval-Augmented Generation (RAG) with Graph-based knowledge representation to allow developers to semantically query their codebase, identify code dependencies, and evaluate the "impact radius" of potential changes.
 
 ## Features
 
@@ -84,5 +84,5 @@ To exit the CLI, press `Ctrl+C` twice.
 4. **Query Resolution (`query.py`):** 
    * Captures the user query and assesses if it is a follow-up.
    * Performs a local cosine similarity search in MongoDB to retrieve relevant code chunks.
-   * Queries Neo4j for the dependency graph (blast radius) around the matched code chunks.
+   * Queries Neo4j for the dependency graph (impact radius) around the matched code chunks.
    * Prompts the LLM (Gemini) with the code, the impact radius, and conversation history to formulate the final response.
