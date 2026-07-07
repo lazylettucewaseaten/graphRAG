@@ -12,6 +12,10 @@ https://youtu.be/IgHSRF05rcA
 * **Follow-up Detection:** Automatically detects conversational follow-ups and maintains a persistent context window to carry over relevant context from previous queries.
 * **Automated Environment Provisioning:** Uses Docker to seamlessly spin up MongoDB Atlas Local for vector search capabilities without requiring a cloud connection.
 
+
+## Pending
+*  All the pending features to be implemented are mentioned in pending.txt for now.
+
 ## Prerequisites
 
 Ensure you have the following installed on your system before proceeding:

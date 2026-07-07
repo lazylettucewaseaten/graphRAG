@@ -113,6 +113,8 @@ maindepth=1
 def get_impact_radius(node_id, depth=maindepth):
     query = """
     match (n:CodeNode {id: $node_id})-[r*1..""" + str(depth) + """]->(affected:CodeNode)
+    with n, affected
+    where size((affected)-[]-()) <= 30
     return distinct affected.id as id, affected.name as name, 
            affected.type as type, affected.file as file
     """
@@ -132,6 +134,8 @@ def get_impact_radius(node_id, depth=maindepth):
     #cypher quert for getting the impact nodes to parse with LLM 
     reverse_query = """
     match (caller:CodeNode)-[r*1..""" + str(depth) + """]->(n:CodeNode {id: $node_id})
+    with n, caller
+    where size((caller)-[]-()) <= 30
     return distinct caller.id as id, caller.name as name,
            caller.type as type, caller.file as file
     """
