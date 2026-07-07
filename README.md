@@ -1,7 +1,8 @@
 # CodeRAG and GraphRAG System
 
 graphRAG is an intelligent Repository Analysis and Query System designed for C++ codebases. It combines Retrieval-Augmented Generation (RAG) with Graph-based knowledge representation to allow developers to semantically query their codebase, identify code dependencies, and evaluate the "impact radius" of potential changes.
-
+## YouTube Link : 
+https://youtu.be/IgHSRF05rcA
 ## Features
 
 * **Semantic Code Search:** Uses `jina-embeddings-v2-base-code` to generate embeddings of code chunks for accurate semantic similarity search.
@@ -76,16 +77,6 @@ bash cli.sh
 
 To exit the CLI, press `Ctrl+C` twice.
 
-## Architecture Pipeline
-
-1. **AST Parsing (`initial.py`):** Uses Tree-sitter to parse the C++ codebase. It resolves function calls and inheritances (prioritizing same-file and same-directory scopes to avoid collisions) and outputs the nodes and relationships to a JSON file.
-2. **Vector Ingestion (`ingestion.py`):** Reads the parsed code chunks, removes duplicates, generates vector embeddings using SentenceTransformers, and stores them in MongoDB Atlas Local.
-3. **Graph Loading (`load_to_neo4j.py`):** Clears any stale data in the Neo4j database, then imports the nodes (files, classes, functions) and relationships (CALLS, INHERITS, FILE_CONTAINS).
-4. **Query Resolution (`query.py`):** 
-   * Captures the user query and assesses if it is a follow-up.
-   * Performs a local cosine similarity search in MongoDB to retrieve relevant code chunks.
-   * Queries Neo4j for the dependency graph (impact radius) around the matched code chunks.
-   * Prompts the LLM (Gemini) with the code, the impact radius, and conversation history to formulate the final response.
 
 ## Detailed Pipeline Workflow
 
