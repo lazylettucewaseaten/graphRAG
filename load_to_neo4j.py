@@ -33,10 +33,10 @@ def main():
 
     with driver.session(database=database) as session:
         session.run("MATCH (n:CodeNode) DETACH DELETE n")
-        print("[+] cleared existing graph data")
 
         # Create index for fast lookups
         session.run("CREATE INDEX IF NOT EXISTS FOR (n:CodeNode) ON (n.id)")
+        session.run("CREATE FULLTEXT INDEX bm25_index IF NOT EXISTS FOR (n:CodeNode) ON EACH [n.text]")
 
         # Batch insert all nodes
         BATCH_SIZE = 500
@@ -45,13 +45,12 @@ def main():
             session.run(
                 """
                 UNWIND $nodes AS n
-                CREATE (node:CodeNode {id: n.id, type: n.type, name: n.name, file: n.file})
+                CREATE (node:CodeNode {id: n.id, type: n.type, name: n.name, file: n.file, text: n.text})
                 """,
                 nodes=batch
             )
-        print(f"[+] Inserted {len(nodes)} nodes")
 
-        # Batch insert relationships grouped by type
+        #  insert relationships grouped by type
         rel_types = set(r["type"] for r in relations)
         for rel_type in rel_types:
             batch = [r for r in relations if r["type"] == rel_type]
@@ -66,10 +65,10 @@ def main():
                     """,
                     rels=chunk
                 )
-            print(f"[+] Created {len(batch)} {rel_type} relationships")
+            print(f"Created {len(batch)} {rel_type} relationships")
 
     driver.close()
-    print("[+] Done loading into Neo4j")
+    print(" Done loading into Neo4j")
 
 
 if __name__ == '__main__':

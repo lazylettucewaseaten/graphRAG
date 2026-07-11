@@ -3,16 +3,16 @@ import os
 import json
 from google import genai
 import requests
-from pymongo import MongoClient
+import chromadb
 from sentence_transformers import SentenceTransformer
 from neo4j import GraphDatabase
 from dotenv import load_dotenv
 
 load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
 
-client = MongoClient(os.environ.get("MONGO_URI"))
-db = client[os.environ.get("MONGO_DB")]
-collection = db[os.environ.get("MONGO_COLLECTION")]
+chroma_client = chromadb.PersistentClient(path="./chroma_db")
+collection_name = os.environ.get("CHROMA_COLLECTION", "graphrag")
+chroma_collection = chroma_client.get_or_create_collection(name=collection_name)
 
 model = SentenceTransformer(os.environ.get("EMBEDDING_MODEL"), trust_remote_code=True)
 device = os.environ.get("DEVICE", "cuda")
@@ -75,28 +75,43 @@ answer only "yes" or "no"."""
 def vector_search(query_text):
     query_embedding = model.encode(query_text).tolist()
 
-    pipeline = [
-        {
-            "$vectorSearch": {
-                "index": "vector_index",
-                "path": "embedding",
-                "queryVector": query_embedding,
-                "numCandidates": 150,
-                "limit": 5
-            }
-        },
-        {
-            "$project": {
-                "_id": 1,
-                "file_path": 1,
-                "start_b": 1,
-                "end_b": 1,
-                "score": {"$meta": "vectorSearchScore"}
-            }
-        }
-    ]
+    results = chroma_collection.query(
+        query_embeddings=[query_embedding],
+        n_results=5
+    )
 
-    results = list(collection.aggregate(pipeline))
+    formatted_results = []
+    if results['ids'] and len(results['ids']) > 0:
+        for i in range(len(results['ids'][0])):
+            formatted_results.append({
+                "_id": results['ids'][0][i],
+                "file_path": results['metadatas'][0][i]["file_path"],
+                "start_b": results['metadatas'][0][i]["start_b"],
+                "end_b": results['metadatas'][0][i]["end_b"]
+            })
+
+    return formatted_results
+
+
+def keyword_search(query_text):
+    query = """
+    CALL db.index.fulltext.queryNodes("bm25_index", $query_text) YIELD node, score
+    RETURN node.id AS _id, node.file AS file_path, node.text AS text, score
+    LIMIT 5
+    """
+    results = []
+    try:
+        with neo4j_driver.session(database=os.environ.get("NEO4J_DATABASE", "neo4j")) as session:
+            result = session.run(query, query_text=query_text)
+            for record in result:
+                results.append({
+                    "_id": record["_id"],
+                    "file_path": record["file_path"],
+                    "code": record["text"],
+                    "score": record["score"]
+                })
+    except Exception as e:
+        print(f"keyword search failed: {e}")
     return results
 
 
@@ -114,7 +129,7 @@ def get_impact_radius(node_id, depth=maindepth):
     query = """
     match (n:CodeNode {id: $node_id})-[r*1..""" + str(depth) + """]->(affected:CodeNode)
     with n, affected
-    where size((affected)-[]-()) <= 30
+    where COUNT { (affected)-[]-() } <= 30
     return distinct affected.id as id, affected.name as name, 
            affected.type as type, affected.file as file
     """
@@ -135,7 +150,7 @@ def get_impact_radius(node_id, depth=maindepth):
     reverse_query = """
     match (caller:CodeNode)-[r*1..""" + str(depth) + """]->(n:CodeNode {id: $node_id})
     with n, caller
-    where size((caller)-[]-()) <= 30
+    where COUNT { (caller)-[]-() } <= 30
     return distinct caller.id as id, caller.name as name,
            caller.type as type, caller.file as file
     """
@@ -183,7 +198,42 @@ def main():
     user_query = sys.argv[1]
     prev_context = load_context()
 
-    search_results = vector_search(user_query)
+    # Refine the user's prompt
+    refine_instruction = (
+        "You are an AI assistant helping to search a codebase. "
+        "Fix any spelling mistakes in the following query. "
+        "If it is a single word or extremely brief, expand it slightly into a clear, concise search phrase. "
+        "Do not make it too long. Output ONLY the refined query, nothing else.\n\n"
+        f"Query: {user_query}"
+    )
+    try:
+        refined = llm_generate(refine_instruction).strip()
+        # Basic check to ensure the LLM didn't return an empty string or repeat the prompt
+        if refined and len(refined) > 2 and "You are an AI" not in refined:
+            print(f"[*] Refined your prompt to: {refined}")
+            user_query = refined
+    except Exception:
+        pass
+
+    vec_results = vector_search(user_query)
+    kw_results = keyword_search(user_query)
+
+    scores = {}
+    docs = {}
+    
+    for rank, res in enumerate(vec_results):
+        doc_id = res["_id"]
+        docs[doc_id] = res
+        scores[doc_id] = scores.get(doc_id, 0) + 1 / (60 + rank)
+        
+    for rank, res in enumerate(kw_results):
+        doc_id = res["_id"]
+        docs[doc_id] = res
+        scores[doc_id] = scores.get(doc_id, 0) + 1 / (60 + rank)
+        
+    sorted_docs = sorted(scores.items(), key=lambda x: x[1], reverse=True)[:5]
+    search_results = [docs[doc_id] for doc_id, _ in sorted_docs]
+
     if not search_results:
         print("no matching code found")
         sys.exit(0)
@@ -192,11 +242,15 @@ def main():
     matched_ids = []
     for res in search_results:
         file_path = res.get("file_path", "")
-        start_b = res.get("start_b", 0)
-        end_b = res.get("end_b", 0)
         doc_id = res.get("_id", "")
 
-        code = read_code_chunk(file_path, start_b, end_b)
+        if "code" in res:
+            code = res["code"]
+        else:
+            start_b = res.get("start_b", 0)
+            end_b = res.get("end_b", 0)
+            code = read_code_chunk(file_path, start_b, end_b)
+
         if code:
             code_chunks.append(f"--- {file_path} ---\n{code}")
             matched_ids.append(doc_id)

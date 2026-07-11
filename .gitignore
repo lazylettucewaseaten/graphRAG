@@ -3,7 +3,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.so
-
+chroma_db/
 # Virtual Environments
 rag/
 venv/
@@ -17,7 +17,7 @@ ENV/
 # Application State & Data
 .context_window.json
 repo_analysis.json
-
+fuse_locking_folder/
 
 # Editor / IDE
 .vscode/

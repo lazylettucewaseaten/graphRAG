@@ -16,17 +16,6 @@ handle_sigint() {
 
 trap handle_sigint SIGINT
 
-# make sure atlas local is running
-if sudo docker ps --format '{{.Names}}' | grep -q '^mongodb-atlas-local$'; then
-    echo " atlas local already running"
-elif sudo docker ps -a --format '{{.Names}}' | grep -q '^mongodb-atlas-local$'; then
-    echo " starting atlas local..."
-    sudo docker start mongodb-atlas-local
-    sleep 5
-else
-    echo " no atlas local container found, run script.sh first"
-    exit 1
-fi
 
 echo "--- graphRAG/codeRAG ---"
 echo "Press Ctrl+C twice to exit."

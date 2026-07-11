@@ -20,7 +20,7 @@ def get_name(node):
     return None
 
 
-def traverse(node, parent_id, rel_path, nodes, relations, calls, inheritance,
+def traverse(node, parent_id, rel_path, nodes, relations, calls, inheritance, code_bytes,
              current_class=None, current_func=None):
     """Walk the AST and collect nodes and relations."""
 
@@ -41,7 +41,8 @@ def traverse(node, parent_id, rel_path, nodes, relations, calls, inheritance,
         if name:
             node_id = f"{rel_path}_class_{name}"
             new_class = name
-            nodes.append({"id": node_id, "type": "class", "name": name, "file": rel_path})
+            text = code_bytes[node.start_byte:node.end_byte].decode('utf-8', errors='ignore')
+            nodes.append({"id": node_id, "type": "class", "name": name, "file": rel_path, "text": text})
             relations.append({"source": parent_id, "target": node_id, "type": "FILE_CONTAINS"})
 
             # inheritance
@@ -70,7 +71,8 @@ def traverse(node, parent_id, rel_path, nodes, relations, calls, inheritance,
                 prefix = f"{current_class}_" if current_class else ""
                 node_id = f"{rel_path}_function_{prefix}{name}"
                 new_func = node_id
-                nodes.append({"id": node_id, "type": "function", "name": name, "file": rel_path})
+                text = code_bytes[node.start_byte:node.end_byte].decode('utf-8', errors='ignore')
+                nodes.append({"id": node_id, "type": "function", "name": name, "file": rel_path, "text": text})
                 relations.append({"source": parent_id, "target": node_id, "type": "FILE_CONTAINS"})
 
     #  call 
@@ -93,7 +95,7 @@ def traverse(node, parent_id, rel_path, nodes, relations, calls, inheritance,
 
     # --- Recurse into children ---
     for child in node.children:
-        traverse(child, node_id, rel_path, nodes, relations, calls, inheritance,
+        traverse(child, node_id, rel_path, nodes, relations, calls, inheritance, code_bytes,
                  new_class, new_func)
 
 
@@ -141,8 +143,9 @@ def main():
 
             tree = parser.parse(code)
             file_id = f"{proj_path}_file"
-            nodes.append({"id": file_id, "type": "file", "name": proj_path, "file": proj_path})
-            traverse(tree.root_node, file_id, proj_path, nodes, relations, calls, inheritance)
+            file_text = code.decode('utf-8', errors='ignore')
+            nodes.append({"id": file_id, "type": "file", "name": proj_path, "file": proj_path, "text": file_text})
+            traverse(tree.root_node, file_id, proj_path, nodes, relations, calls, inheritance, code)
 
 
     defs = {}

@@ -4,32 +4,10 @@ import sys
 from tree_sitter import Parser, Language
 import tree_sitter_cpp
 from sentence_transformers import SentenceTransformer
-from pymongo import MongoClient
+import chromadb
 import torch
 from dotenv import load_dotenv
-
-from pymongo.operations import SearchIndexModel
-
-import time
-
 load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
-
-index_name="vector_index"
-search_index_model=SearchIndexModel(
-    definition={
-        "fields":[
-            {
-                "type":"vector",
-                "numDimensions":768,
-                "path":"embedding",
-                "similarity":"cosine"
-            }
-        ]
-    },
-    name=index_name,
-    type="vectorSearch"
-)
-
 
 IGNORE_DIRS = {'.git', 'node_modules', 'venv', '.venv', '__pycache__',
                 'build', 'dist', 'target', '.idea', '.vscode'}
@@ -125,11 +103,15 @@ def main():
 
 
     try:
-        client = MongoClient(os.environ.get("MONGO_URI"))
-        db = client[os.environ.get("MONGO_DB")]
-        collection = db[os.environ.get("MONGO_COLLECTION")]
+        chroma_client = chromadb.PersistentClient(path="./chroma_db")
+        collection_name = os.environ.get("CHROMA_COLLECTION", "graphrag")
+        try:
+            chroma_client.delete_collection(name=collection_name)
+        except Exception:
+            pass
+        collection = chroma_client.create_collection(name=collection_name)
     except Exception as e:
-        print(f"{e}")
+        print(f"ChromaDB initialization failed: {e}")
         sys.exit(1)
 
 
@@ -171,7 +153,7 @@ def main():
 
 
     texts = [chunk["text"] for chunk in chunks_list]
-    embeddings = model.encode(texts, batch_size=32, show_progress_bar=True)
+    embeddings = model.encode(texts, batch_size=16, show_progress_bar=True)
 
     documents = []
     for chunk, emb in zip(chunks_list, embeddings):
@@ -186,18 +168,21 @@ def main():
 
 
     try:
-        collection.delete_many({})
-        collection.insert_many(documents)
+        ids = [str(doc["_id"]) for doc in documents]
+        embs = [doc["embedding"] for doc in documents]
+        metas = [{"file_path": doc["file_path"], "start_b": doc["start_b"], "end_b": doc["end_b"]} for doc in documents]
+        
+        # Batch insert to ChromaDB
+        BATCH_SIZE = 500
+        for i in range(0, len(ids), BATCH_SIZE):
+            collection.add(
+                ids=ids[i:i+BATCH_SIZE],
+                embeddings=embs[i:i+BATCH_SIZE],
+                metadatas=metas[i:i+BATCH_SIZE]
+            )
     except Exception as e:
-        print(f" err inserting into MongoDB: {e}")
+        print(f" err inserting into ChromaDB: {e}")
         sys.exit(1)
-
-    try:
-        existing_indexes = [idx.get("name") for idx in collection.list_search_indexes()]
-        if index_name not in existing_indexes:
-            collection.create_search_index(model=search_index_model)
-    except Exception as e:
-        print(" create the index manually in Atlas UI.")
     
 
 if __name__ == '__main__':

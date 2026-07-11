@@ -12,7 +12,7 @@ transformers
 sentence-transformers
 huggingface-hub
 einops
-pymongo
+chromadb
 python-dotenv
 google-genai
 neo4j

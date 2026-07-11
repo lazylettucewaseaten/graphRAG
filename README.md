@@ -82,17 +82,54 @@ bash cli.sh
 To exit the CLI, press `Ctrl+C` twice.
 
 
-## Detailed Pipeline Workflow
+## Detailed Pipeline Workflow & Architecture
+
+```text
+                                 [ Target Repository ]
+                                           |
+                                    script.sh (Clone)
+                                           v
+  +---------------------------------------------------------------------------------+
+  |                               AST Parsing & Extraction                          |
+  |                                   (initial.py)                                  |
+  +---------------------------------------------------------------------------------+
+           /                                                               \
+          / (Extract Graph & Text)                        (Extract Text Chunks) \
+         v                                                                   v
++------------------------+                                        +------------------------+
+|      Neo4j (Graph)     |                                        |    Embedding Model     |
+| - Nodes: Class, Func   |                                        |    (jina-embeddings)   |
+| - Rels: CALLS, etc.    |                                        +------------------------+
+| - BM25 Full-Text Index |                                                   |
++------------------------+                                                   v
+         | (Keyword Search)                                                  | (Semantic Search)
+         |                                                        +------------------------+
+         |                                                        |       ChromaDB         |
+         |                                                        |  - Vector Embeddings   |
+         |                                                        +------------------------+
+         |                                                                   |
+         +-----------------------------+       +-----------------------------+
+                                       |       |
+                                       v       v
+                            +-----------------------------+
+                            |    Reciprocal Rank Fusion   |
+                            |       (query.py)            |
+                            +-----------------------------+
+                                       ^       |
+                                       |       v
+                     LLM Prompt Refinement     Impact Radius & Final LLM Context
+                                       |       |
+                                  [ User Query ]
+```
 
 The complete end-to-end pipeline operates in the following sequential stages:
 
 1. **Repository Ingestion:** The process begins by taking a target GitHub repository URL and fetching the codebase.
 2. **AST Generation:** Tree-sitter runs on the codebase to generate an Abstract Syntax Tree (AST), capturing the structural syntax and code elements.
-3. **Graph Construction:** The AST is filtered and processed to extract semantic nodes and relationships, which are then used to construct a knowledge graph stored in a Neo4j database.
+3. **Graph Construction & BM25 Indexing:** The AST is filtered and processed to extract semantic nodes (Classes, Functions) and relationships. This is used to construct a knowledge graph stored in **Neo4j**. A full-text index is also built on the code text to enable **BM25 Keyword Search**.
 4. **Vector Embedding Generation:** In `ingestion.py`, the code chunks are processed to generate vector embeddings using **Jina Embeddings** (`jina-embeddings-v2-base-code`). 
-   * *Internally, Jina Embeddings v2 utilizes **JinaBERT**—a modified BERT architecture equipped with ALiBi (Attention with Linear Biases)—which allows it to efficiently handle an extended context window of up to 8,192 tokens for long code comprehension.*
-5. **Vector Storage:** The generated vector embeddings are subsequently stored in a local instance of MongoDB Atlas, which is spun up seamlessly via Docker.
-6. **Query Pre-processing:** When a user submits a query, the system first evaluates the conversational context to determine whether the query is a follow-up to previous interactions.
-7. **Prompt Embedding & Vector Search:** The user's query prompt is then converted into a vector embedding. The system queries the local MongoDB Atlas vector store using the prompt embedding to retrieve the most semantically relevant code chunks.
-8. **Graph Traversal (Impact Radius):** The retrieved chunks are used as entry points to traverse the Neo4j knowledge graph. The system finds the affected interconnected nodes up to a maximum depth (`maxdepth`), effectively mapping the codebase "impact radius".
-9. **LLM Generation & Display:** The original prompt, the retrieved relevant code snippets, and the graph-based impact radius are sent to an external LLM API to generate an informed response, which is finally displayed to the user.
+5. **Vector Storage:** The generated vector embeddings are stored locally using **ChromaDB**.
+6. **Query Pre-processing & Refinement:** When a user submits a query, the system evaluates the context and uses an LLM to silently refine the query (fixing typos and expanding short phrases) to improve search accuracy.
+7. **Hybrid Search (Vector + Keyword):** The refined query is sent to both ChromaDB (for semantic vector search) and Neo4j (for exact BM25 keyword search). The results are fused together using Reciprocal Rank Fusion (RRF) to get the most accurate chunks.
+8. **Graph Traversal (Impact Radius):** The retrieved chunks are used as entry points to traverse the Neo4j knowledge graph. The system finds the affected interconnected nodes, effectively mapping the codebase "impact radius".
+9. **LLM Generation & Display:** The original prompt, the retrieved relevant code snippets, and the graph-based impact radius are sent to Google's Gemini to generate an informed response.
