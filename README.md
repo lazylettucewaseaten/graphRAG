@@ -20,9 +20,8 @@ https://youtu.be/IgHSRF05rcA
 
 Ensure you have the following installed on your system before proceeding:
 * Python 3.10+
-* Docker (must be running for MongoDB Atlas Local)
 * Git
-* Neo4j
+* Neo4j (Ensure its enabled and the instance is connected use GUI for simplicity)
 
 ## Installation and Setup
 
@@ -35,10 +34,7 @@ cd /path/to/graphRAG
 A `.env` file is required at the root of the project to manage API keys and database connections. Create a `.env` file and populate it with the following configuration:
 
 ```env
-MONGO_URI=mongodb://localhost:27017/?directConnection=true
-MONGO_DB=graphrag
-MONGO_COLLECTION=graphrag
-
+CHROMA_COLLECTION=graphrag
 NEO4J_URI=neo4j://127.0.0.1:7687
 NEO4J_USER=neo4j
 NEO4J_PASSWORD=your_neo4j_password
@@ -85,7 +81,7 @@ To exit the CLI, press `Ctrl+C` twice.
 ## Detailed Pipeline Workflow & Architecture
 
 ```text
-                                 [ Target Repository ]
+                                  [ Target Repository ]
                                            |
                                     script.sh (Clone)
                                            v
@@ -94,7 +90,7 @@ To exit the CLI, press `Ctrl+C` twice.
   |                                   (initial.py)                                  |
   +---------------------------------------------------------------------------------+
            /                                                               \
-          / (Extract Graph & Text)                        (Extract Text Chunks) \
+          / (Extract Graph & Text)                    (Extract Text Chunks) \
          v                                                                   v
 +------------------------+                                        +------------------------+
 |      Neo4j (Graph)     |                                        |    Embedding Model     |
@@ -119,7 +115,7 @@ To exit the CLI, press `Ctrl+C` twice.
                                        |       v
                      LLM Prompt Refinement     Impact Radius & Final LLM Context
                                        |       |
-                                  [ User Query ]
+                                    [ User Query ]
 ```
 
 The complete end-to-end pipeline operates in the following sequential stages:
